@@ -232,6 +232,7 @@ func (t *Tailscale) start() error {
 			return
 		}
 		t.serverStarted = true
+		trackTailscaleStarted(t)
 		ctx, cancel := context.WithTimeout(t.ctx, 30*time.Second)
 		defer cancel()
 		if err := t.applyPrefs(ctx); err != nil {
@@ -517,6 +518,7 @@ func (t *Tailscale) Close() error {
 		t.startErr = errors.New("tailscale outbound closed")
 	})
 	if t.server != nil && t.serverStarted { // tsnet.Server.Close() must not be called before or concurrently with Start.
+		trackTailscaleClosed(t)
 		return t.server.Close()
 	}
 	return nil

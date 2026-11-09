@@ -230,3 +230,9 @@ func (t *Tailscale) ExitNodeError() string {
 	}
 	return t.exitNodeErr.Error()
 }
+
+// Closed reports whether Close has run, so a closed node is never kept
+// across a reload.
+func (t *Tailscale) Closed() bool {
+	return t.ctx == nil || t.ctx.Err() != nil
+}
