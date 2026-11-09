@@ -112,6 +112,7 @@ func (bp *baseProvider) setProxies(proxies []C.Proxy) {
 func (bp *baseProvider) setProxyList(proxies C.ProxyList) {
 	bp.mutex.Lock()
 	defer bp.mutex.Unlock()
+	bp.reconcileTailscale(proxies)
 	bp.list = proxies
 	bp.version += 1
 	bp.healthCheck.setProxyList(proxies)

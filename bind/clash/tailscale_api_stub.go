@@ -22,3 +22,5 @@ func tailscaleDERPRoutes(string) (map[string]string, error) { return nil, errTai
 func tailscaleNetworkChanged() int { return 0 }
 
 func tailscaleReconnect(context.Context, string) error { return errTailscaleNotBuiltIn }
+
+func tailscaleNodes() []tailscaleNode { return nil }

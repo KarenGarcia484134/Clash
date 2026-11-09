@@ -246,8 +246,9 @@ func (s *BoxService) start(configContent string) (startErr error) {
 		startupPhase("pre-apply-config")
 		logFootprint("before applying it (providers load here)")
 		applying.Store(true)
-		reconcileTailscaleNodes(cfg.Proxies)
+		reconcileTailscaleNodes(cfg.Proxies, cfg.Providers)
 		executor.ApplyConfig(cfg, true)
+		settleTailscaleProviders(cfg.Providers)
 		executor.WaitBeforeTunAttach = nil
 		logFootprint("after applying it")
 		startupPhase("apply-config-done")
@@ -482,8 +483,9 @@ func (s *BoxService) reload(configContent string) error {
 		func() {
 			s.routingMu.Lock()
 			defer s.routingMu.Unlock()
-			reconcileTailscaleNodes(cfg.Proxies)
+			reconcileTailscaleNodes(cfg.Proxies, cfg.Providers)
 			executor.ApplyConfig(cfg, true)
+			settleTailscaleProviders(cfg.Providers)
 			applyExternalController(cfg)
 		}()
 		s.runningConfigSHA256 = configurationSHA256(configContent)
