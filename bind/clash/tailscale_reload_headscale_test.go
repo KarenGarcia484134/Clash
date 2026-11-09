@@ -4,6 +4,7 @@ package clash
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"runtime"
@@ -132,6 +133,8 @@ func TestTailscaleReloadKeepsOneNode(t *testing.T) {
 				t.Errorf("%d reloads of an unchanged node restarted it %d times; want it kept", reloads, last.starts-first.starts)
 			}
 
+			checkTailscaleExports(t, v4.String())
+
 			changed := tailscaleReloadDocument(controlURL, clientKey, "clash-reload-renamed", grouped)
 			if err := service.Reload(changed); err != nil {
 				t.Fatal(err)
@@ -155,4 +158,49 @@ func TestTailscaleReloadKeepsOneNode(t *testing.T) {
 			}
 		})
 	}
+}
+
+// checkTailscaleExports calls the app-facing exports against the running
+// node and checks the JSON they return.
+func checkTailscaleExports(t *testing.T, peer string) {
+	t.Helper()
+	var status tailscaleStatusResult
+	if err := json.Unmarshal([]byte(TailscaleStatus(`{"name":"ts","wait":true}`)), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Started || status.BackendState != "Running" || status.Self == nil || len(status.Peers) == 0 || status.Error != "" {
+		t.Errorf("TailscaleStatus = %+v; want a running node with a peer", status)
+	}
+	if status.DERPRoutes["clash-lab"] != "direct" {
+		t.Errorf("TailscaleStatus derpRoutes = %v; want the self-hosted clash-lab region direct", status.DERPRoutes)
+	}
+	var pings []tailscalePingResult
+	if err := json.Unmarshal([]byte(TailscalePing(`{"name":"ts","targets":["`+peer+`","not-an-ip"]}`)), &pings); err != nil {
+		t.Fatal(err)
+	}
+	if len(pings) != 2 || pings[0].LatencyMs <= 0 || pings[0].Error != "" || pings[1].LatencyMs != -1 || pings[1].Error == "" {
+		t.Errorf("TailscalePing = %+v; want the peer answered and the bad target refused", pings)
+	}
+	var routes tailscaleDERPRoutesResult
+	if err := json.Unmarshal([]byte(TailscaleDERPRoutes("ts")), &routes); err != nil {
+		t.Fatal(err)
+	}
+	if routes.DERPRoutes["clash-lab"] != "direct" || routes.Error != "" {
+		t.Errorf("TailscaleDERPRoutes = %+v", routes)
+	}
+	var changed tailscaleActionResult
+	if err := json.Unmarshal([]byte(TailscaleNetworkChanged()), &changed); err != nil {
+		t.Fatal(err)
+	}
+	if changed.Nodes != 1 || changed.Error != "" {
+		t.Errorf("TailscaleNetworkChanged = %+v; want one node told", changed)
+	}
+	var reconnect tailscaleActionResult
+	if err := json.Unmarshal([]byte(TailscaleReconnect("ts")), &reconnect); err != nil {
+		t.Fatal(err)
+	}
+	if reconnect.Error != "" {
+		t.Errorf("TailscaleReconnect on a running node = %+v; want nothing to do", reconnect)
+	}
+	t.Logf("exports: state=%s peers=%d derp=%v ping=%dms via %q", status.BackendState, len(status.Peers), status.DERPRoutes, pings[0].LatencyMs, pings[0].Endpoint)
 }
