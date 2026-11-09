@@ -246,6 +246,7 @@ func (s *BoxService) start(configContent string) (startErr error) {
 		startupPhase("pre-apply-config")
 		logFootprint("before applying it (providers load here)")
 		applying.Store(true)
+		reconcileTailscaleNodes(cfg.Proxies)
 		executor.ApplyConfig(cfg, true)
 		executor.WaitBeforeTunAttach = nil
 		logFootprint("after applying it")
@@ -481,6 +482,7 @@ func (s *BoxService) reload(configContent string) error {
 		func() {
 			s.routingMu.Lock()
 			defer s.routingMu.Unlock()
+			reconcileTailscaleNodes(cfg.Proxies)
 			executor.ApplyConfig(cfg, true)
 			applyExternalController(cfg)
 		}()
@@ -664,6 +666,7 @@ func shutdownCore() {
 	for _, current := range proxies {
 		_ = current.Close()
 	}
+	forgetTailscaleNodes()
 }
 
 func (s *BoxService) RuntimeDiagnosticsJSON() string {

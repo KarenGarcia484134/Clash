@@ -66,6 +66,9 @@ func TestNoNewLogPrefixArrivesUnnoticed(t *testing.T) {
 			"selected by the app; state.json carries result, error and pendingReason"},
 		"Provider|Errorln": {"Errorln", "developer-facing: the refresher goroutine recovered from a " +
 			"panic and stopped. NOT selected by the app"},
+		"Tailscale|Infoln": {"Infoln", "developer-facing: a Start or Reload kept the running tsnet " +
+			"node or closed the one it replaced (tailscale_reconcile.go). Instrumentation, NOT " +
+			"selected by the app; the node's state is what TailscaleStatus reports"},
 	}
 
 	prefix := regexp.MustCompile(`log\.(Warnln|Errorln|Infoln)\("\[([^\]]+)\]`)
