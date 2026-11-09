@@ -21,6 +21,10 @@ type tailscaleStatusParams struct {
 	Wait bool `json:"wait"`
 	// Rebind reports a network change to the node first.
 	Rebind bool `json:"rebind"`
+	// Reset signs the node out as FlClash's reset does: the node is closed
+	// and forgotten, its saved login is deleted, and the status is empty.
+	// The next reload starts a fresh node, which logs in again.
+	Reset bool `json:"reset"`
 }
 
 type tailscalePingParams struct {
@@ -80,6 +84,19 @@ type tailscaleActionResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+type tailscaleNode struct {
+	Name string `json:"name"`
+	// Provider is the proxy provider the node came from; empty for one in
+	// the proxies section.
+	Provider string `json:"provider,omitempty"`
+	Started  bool   `json:"started"`
+}
+
+type tailscaleNodesResult struct {
+	Nodes []tailscaleNode `json:"nodes"`
+	Error string          `json:"error,omitempty"`
+}
+
 var errTailscaleNodeMissing = errors.New("tailscale node not found")
 
 const (
@@ -94,8 +111,8 @@ func tailscaleErrorJSON(err error) string {
 	return mustJSON(map[string]string{"error": err.Error()})
 }
 
-// TailscaleStatus takes {"name","start","wait","rebind"} and returns the
-// node's status as FlClash's tailscale.status does.
+// TailscaleStatus takes {"name","start","wait","rebind","reset"} and returns
+// the node's status as FlClash's tailscale.status does.
 func TailscaleStatus(paramsJSON string) string {
 	return bridgeSafeString(recoverAppCallValueOr("TailscaleStatus", tailscaleErrorJSON(errors.New("tailscale status panicked")), func() string {
 		var params tailscaleStatusParams
@@ -178,5 +195,18 @@ func TailscaleReconnect(name string) string {
 			result.Error = err.Error()
 		}
 		return mustJSON(result)
+	}))
+}
+
+// TailscaleNodes lists the tailscale proxies of the running configuration,
+// those its proxy providers bring included, so the host can show them
+// without parsing the profile: {"nodes":[{"name","provider","started"}]}.
+func TailscaleNodes() string {
+	return bridgeSafeString(recoverAppCallValueOr("TailscaleNodes", tailscaleErrorJSON(errors.New("tailscale nodes panicked")), func() string {
+		nodes := tailscaleNodes()
+		if nodes == nil {
+			nodes = []tailscaleNode{}
+		}
+		return mustJSON(tailscaleNodesResult{Nodes: nodes})
 	}))
 }

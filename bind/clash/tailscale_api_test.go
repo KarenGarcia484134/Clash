@@ -35,6 +35,9 @@ func TestTailscaleExportsReportAMissingNode(t *testing.T) {
 	if reconnect.Error == "" {
 		t.Error("TailscaleReconnect for a missing node reported no error")
 	}
+	if got := TailscaleNodes(); got != `{"nodes":[]}` {
+		t.Errorf("TailscaleNodes with no node = %s; want an empty list", got)
+	}
 	if got := TailscaleNetworkChanged(); got != "{}" {
 		t.Errorf("TailscaleNetworkChanged with no node = %s; want {}", got)
 	}
@@ -52,7 +55,7 @@ func TestTailscaleExportsRefuseBadJSON(t *testing.T) {
 }
 
 func TestTailscaleExportsRecoverAPanic(t *testing.T) {
-	for _, name := range []string{"TailscaleStatus", "TailscalePing", "TailscaleDERPRoutes", "TailscaleNetworkChanged", "TailscaleReconnect"} {
+	for _, name := range []string{"TailscaleStatus", "TailscalePing", "TailscaleDERPRoutes", "TailscaleNetworkChanged", "TailscaleReconnect", "TailscaleNodes"} {
 		target := name
 		appCallTestPanic.Store(&target)
 		var got string
@@ -67,6 +70,8 @@ func TestTailscaleExportsRecoverAPanic(t *testing.T) {
 			got = TailscaleNetworkChanged()
 		case "TailscaleReconnect":
 			got = TailscaleReconnect("ts")
+		case "TailscaleNodes":
+			got = TailscaleNodes()
 		}
 		appCallTestPanic.Store(nil)
 		if !strings.Contains(got, "panicked") {

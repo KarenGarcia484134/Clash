@@ -9,7 +9,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ProjectClash/Clash/adapter"
 	"github.com/ProjectClash/Clash/adapter/outbound"
+	C "github.com/ProjectClash/Clash/constant"
+	"github.com/ProjectClash/Clash/log"
 	"github.com/ProjectClash/Clash/tunnel"
 	"github.com/metacubex/tailscale/ipn/ipnstate"
 	"github.com/metacubex/tailscale/tailcfg"
@@ -33,6 +36,40 @@ func findTailscaleNode(name string) (*outbound.Tailscale, bool) {
 		}
 	}
 	return nil, false
+}
+
+// tailscaleNodes lists the tailscale proxies in the proxies section, then
+// those of each provider, each sorted by name.
+func tailscaleNodes() []tailscaleNode {
+	var nodes []tailscaleNode
+	for name, proxy := range tunnel.Proxies() {
+		if proxy == nil {
+			continue
+		}
+		if node, ok := outbound.UnwrapTailscale(proxy.Adapter()); ok {
+			nodes = append(nodes, tailscaleNode{Name: name, Started: node.Started() && !node.Closed()})
+		}
+	}
+	for providerName, provider := range tunnel.Providers() {
+		if _, ok := provider.ProxyList().(C.ProxySlice); !ok {
+			continue
+		}
+		for _, proxy := range provider.Proxies() {
+			if proxy == nil {
+				continue
+			}
+			if node, ok := outbound.UnwrapTailscale(proxy.Adapter()); ok {
+				nodes = append(nodes, tailscaleNode{Name: proxy.Name(), Provider: providerName, Started: node.Started() && !node.Closed()})
+			}
+		}
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		if nodes[i].Provider != nodes[j].Provider {
+			return nodes[i].Provider < nodes[j].Provider
+		}
+		return nodes[i].Name < nodes[j].Name
+	})
+	return nodes
 }
 
 // tailscalePing sends one disco ping, which shows whether the path is direct
@@ -85,6 +122,9 @@ func tailscaleStatus(ctx context.Context, params tailscaleStatusParams) (tailsca
 	if !ok {
 		return tailscaleStatusResult{}, errTailscaleNodeMissing
 	}
+	if params.Reset {
+		return tailscaleResetResult(node)
+	}
 	if params.Start && !node.Started() {
 		if err := node.Start(ctx); err != nil {
 			return tailscaleStatusResult{Started: node.Started(), DialerProxy: node.DialerProxy()}, err
@@ -118,6 +158,15 @@ func tailscaleStatus(ctx context.Context, params tailscaleStatusParams) (tailsca
 	result.DERPRoutes = node.DERPRoutes()
 	result.ExitNodeError = node.ExitNodeError()
 	return result, nil
+}
+
+// tailscaleResetResult closes the node and forgets it, so the next reload
+// does not keep it, and deletes its saved login. The node stays in the
+// running proxies, closed, until the host reloads.
+func tailscaleResetResult(node *outbound.Tailscale) (tailscaleStatusResult, error) {
+	adapter.RetireTailscaleNode(node)
+	log.Infoln("[Tailscale](%s) reset: closed the node and deleted its saved login", node.Name())
+	return tailscaleStatusResult{Peers: []tailscalePeer{}}, node.ForgetLogin()
 }
 
 func convertTailscaleStatus(status *ipnstate.Status) tailscaleStatusResult {
